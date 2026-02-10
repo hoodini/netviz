@@ -1,13 +1,11 @@
-import { useState, useCallback } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { useNetworkCapture } from './hooks/useNetworkCapture';
 import { fireDemoBurst } from './services/realTraffic';
-import NetworkScene3D from './components/NetworkScene3D';
+import TopologyCanvas from './components/TopologyCanvas';
 import RequestList from './components/RequestList';
 import RequestInspector from './components/RequestInspector';
 import StatsBar from './components/StatsBar';
 import ControlBar from './components/ControlBar';
-import HandTracker from './components/HandTracker';
-import type { HandGesture } from './hooks/useHandTracking';
 
 export default function App() {
   const {
@@ -22,10 +20,18 @@ export default function App() {
     clearRequests,
   } = useNetworkCapture();
 
-  const [currentGesture, setCurrentGesture] = useState<HandGesture | null>(null);
+  const topologyRef = useRef<HTMLDivElement>(null);
+  const [canvasSize, setCanvasSize] = useState({ width: 800, height: 500 });
 
-  const handleGestureChange = useCallback((gesture: HandGesture | null) => {
-    setCurrentGesture(gesture);
+  useEffect(() => {
+    const el = topologyRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      if (width > 0 && height > 0) setCanvasSize({ width, height });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   return (
@@ -39,18 +45,11 @@ export default function App() {
             </div>
             <h1 className="text-sm font-bold tracking-tight">
               Net<span className="text-accent-blue">Viz</span>
-              <span className="text-accent-purple ml-1 text-[10px] font-normal">3D</span>
             </h1>
           </div>
           <span className="text-[10px] text-gray-500 hidden sm:block">
             Interactive Network Request Visualizer
           </span>
-          {currentGesture && currentGesture.type !== 'none' && (
-            <div className="hidden md:flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-accent-cyan/10 text-accent-cyan text-[10px]">
-              <div className="w-1.5 h-1.5 rounded-full bg-accent-cyan animate-pulse" />
-              Gesture: {currentGesture.type.replace('_', ' ')}
-            </div>
-          )}
         </div>
         <ControlBar
           isCapturing={isCapturing}
@@ -76,18 +75,18 @@ export default function App() {
           />
         </div>
 
-        {/* Center: 3D Topology */}
+        {/* Center: Topology Canvas */}
         <div className="flex-1 flex flex-col gap-3 min-w-0">
-          <div className="glass-panel flex-1 relative overflow-hidden">
+          <div ref={topologyRef} className="glass-panel flex-1 relative overflow-hidden">
             <div className="absolute top-2 left-3 text-[10px] uppercase tracking-wider text-gray-500 font-semibold z-10">
-              3D Network Topology
+              Network Topology
             </div>
-            <NetworkScene3D
+            <TopologyCanvas
               packets={packets}
-              topologyNodes={topologyNodes}
-              isCapturing={isCapturing}
+              nodes={topologyNodes}
+              width={canvasSize.width}
+              height={canvasSize.height}
             />
-            <HandTracker onGestureChange={handleGestureChange} />
           </div>
 
           {/* Mobile request list */}
