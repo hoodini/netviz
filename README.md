@@ -78,8 +78,8 @@ src/
 
 ```bash
 # Clone the repository
-git clone https://github.com/hoodini/copilot-cc.git
-cd copilot-cc
+git clone https://github.com/hoodini/netviz.git
+cd netviz
 
 # Install dependencies
 npm install
