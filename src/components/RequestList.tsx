@@ -44,11 +44,19 @@ export default function RequestList({ requests, selectedId, onSelect }: RequestL
               </span>
             </div>
             <div className="text-xs text-gray-400 truncate font-mono">
-              {new URL(req.url).pathname}
+              {req.hostname}{new URL(req.url).pathname}
             </div>
             <div className="flex items-center gap-3 mt-1">
               <span className="text-[10px] text-gray-500">{formatBytes(req.size)}</span>
               <span className="text-[10px] text-gray-500">{req.type}</span>
+              {req.techStack && (
+                <span
+                  className="text-[9px] px-1 py-0.5 rounded font-medium"
+                  style={{ backgroundColor: req.techStack.color + '20', color: req.techStack.color }}
+                >
+                  {req.techStack.name}
+                </span>
+              )}
             </div>
           </button>
         ))}

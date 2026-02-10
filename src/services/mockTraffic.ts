@@ -92,9 +92,12 @@ export function generateMockRequest(): NetworkRequest {
     : [200, 201, 204][Math.floor(Math.random() * 3)];
   const size = Math.round(randomBetween(200, 50000));
 
+  const parsedUrl = new URL(endpoint.url);
+
   return {
     id: generateId(),
     url: endpoint.url,
+    hostname: parsedUrl.hostname,
     method,
     status: isError ? 'error' : 'success',
     statusCode,

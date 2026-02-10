@@ -1,12 +1,13 @@
 import { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Text, Sphere } from '@react-three/drei';
+import { Html, Sphere } from '@react-three/drei';
 import * as THREE from 'three';
 
 interface NetworkNode3DProps {
   position: [number, number, number];
   label: string;
   nodeType: 'client' | 'server' | 'cdn' | 'api';
+  color?: string;
   isActive?: boolean;
 }
 
@@ -24,11 +25,11 @@ const NODE_ICONS: Record<string, string> = {
   api: 'API',
 };
 
-export default function NetworkNode3D({ position, label, nodeType, isActive = true }: NetworkNode3DProps) {
+export default function NetworkNode3D({ position, label, nodeType, color: colorProp, isActive = true }: NetworkNode3DProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const glowRef = useRef<THREE.Mesh>(null);
   const ringRef = useRef<THREE.Mesh>(null);
-  const color = NODE_COLORS[nodeType];
+  const color = colorProp ?? NODE_COLORS[nodeType];
 
   const glowMaterial = useMemo(() => new THREE.MeshBasicMaterial({
     color,
@@ -81,29 +82,18 @@ export default function NetworkNode3D({ position, label, nodeType, isActive = tr
         <meshBasicMaterial color="#ffffff" transparent opacity={0.7} />
       </Sphere>
 
-      {/* Type label on the node */}
-      <Text
-        position={[0, 0, 0.25]}
-        fontSize={0.1}
-        color="#ffffff"
-        anchorX="center"
-        anchorY="middle"
-        font={undefined}
-      >
-        {NODE_ICONS[nodeType]}
-      </Text>
-
-      {/* Name label below */}
-      <Text
-        position={[0, -0.55, 0]}
-        fontSize={0.12}
-        color="#94a3b8"
-        anchorX="center"
-        anchorY="middle"
-        font={undefined}
-      >
-        {label}
-      </Text>
+      {/* HTML labels - render as DOM overlay, always face camera */}
+      <Html position={[0, -0.55, 0]} center distanceFactor={6} style={{ pointerEvents: 'none' }}>
+        <div className="flex flex-col items-center gap-0.5 select-none">
+          <span
+            className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+            style={{ color: '#fff', backgroundColor: color + '40' }}
+          >
+            {NODE_ICONS[nodeType]}
+          </span>
+          <span className="text-[10px] text-gray-400 whitespace-nowrap">{label}</span>
+        </div>
+      </Html>
     </group>
   );
 }

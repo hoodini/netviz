@@ -16,9 +16,16 @@ export interface RequestTiming {
   duration: number;
 }
 
+export interface TechStack {
+  name: string;
+  color: string;
+  category: 'cdn' | 'api' | 'analytics' | 'font' | 'cloud' | 'dev' | 'generic';
+}
+
 export interface NetworkRequest {
   id: string;
   url: string;
+  hostname: string;
   method: HttpMethod;
   status: RequestStatus;
   statusCode: number;
@@ -28,6 +35,9 @@ export interface NetworkRequest {
   size: number;
   type: string;
   timestamp: number;
+  protocol?: string;
+  initiatorType?: string;
+  techStack?: TechStack;
   payload?: string;
 }
 
@@ -38,6 +48,7 @@ export interface Packet {
   method: HttpMethod;
   status: RequestStatus;
   isResponse: boolean;
+  targetNodeId: string;
 }
 
 export interface TopologyNode {
@@ -46,7 +57,9 @@ export interface TopologyNode {
   x: number;
   y: number;
   type: 'client' | 'server' | 'cdn' | 'api';
-  icon: string;
+  color: string;
+  techStack?: TechStack;
+  requestCount: number;
 }
 
 export interface DashboardStats {

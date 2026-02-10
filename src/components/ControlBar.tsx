@@ -2,9 +2,10 @@ interface ControlBarProps {
   isCapturing: boolean;
   onToggleCapture: () => void;
   onClear: () => void;
+  onGenerateTraffic: () => void;
 }
 
-export default function ControlBar({ isCapturing, onToggleCapture, onClear }: ControlBarProps) {
+export default function ControlBar({ isCapturing, onToggleCapture, onClear, onGenerateTraffic }: ControlBarProps) {
   return (
     <div className="flex items-center gap-3">
       <div className="flex items-center gap-2">
@@ -22,6 +23,12 @@ export default function ControlBar({ isCapturing, onToggleCapture, onClear }: Co
         }`}
       >
         {isCapturing ? '⏸ Pause' : '▶ Resume'}
+      </button>
+      <button
+        onClick={onGenerateTraffic}
+        className="px-3 py-1.5 rounded-lg text-xs font-medium bg-accent-blue/20 text-accent-blue hover:bg-accent-blue/30 transition-all"
+      >
+        🌐 Generate Traffic
       </button>
       <button
         onClick={onClear}

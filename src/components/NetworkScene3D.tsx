@@ -5,73 +5,64 @@ import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import NetworkNode3D from './NetworkNode3D';
 import DataBeam from './DataBeam';
-import type { Packet } from '../types/network';
+import type { Packet, TopologyNode } from '../types/network';
 
 interface NetworkScene3DProps {
   packets: Packet[];
+  topologyNodes: TopologyNode[];
   isCapturing: boolean;
 }
 
-interface SceneNode {
-  id: string;
-  label: string;
-  position: [number, number, number];
-  type: 'client' | 'server' | 'cdn' | 'api';
+/** Convert 2D topology coordinates (0-1 range) to 3D positions */
+function toPosition(node: TopologyNode): [number, number, number] {
+  const x = (node.x - 0.5) * 8;
+  const y = (0.5 - node.y) * 4;
+  const z = node.type === 'client' ? 0.5 : (node.x - 0.5) * -1;
+  return [x, y, z];
 }
 
-const SCENE_NODES: SceneNode[] = [
-  { id: 'client', label: 'Client', position: [-3, 0, 0], type: 'client' },
-  { id: 'cdn', label: 'CDN Edge', position: [-0.8, 1.4, -0.5], type: 'cdn' },
-  { id: 'api', label: 'API Gateway', position: [0, 0, 0.3], type: 'api' },
-  { id: 'server', label: 'Server', position: [2.5, 0.6, -0.3], type: 'server' },
-  { id: 'db', label: 'Database', position: [2.5, -0.8, 0.4], type: 'server' },
-];
-
-const EDGES: [string, string][] = [
-  ['client', 'cdn'],
-  ['client', 'api'],
-  ['api', 'server'],
-  ['api', 'db'],
-  ['cdn', 'server'],
-];
-
-function getNodePosition(id: string): [number, number, number] {
-  return SCENE_NODES.find(n => n.id === id)?.position ?? [0, 0, 0];
+function getNodeType(node: TopologyNode): 'client' | 'server' | 'cdn' | 'api' {
+  return node.type;
 }
 
-function SceneContent({ packets, isCapturing }: NetworkScene3DProps) {
+function SceneContent({ packets, topologyNodes, isCapturing }: NetworkScene3DProps) {
+  // Build a lookup of node positions by ID
+  const nodePositions = useMemo(() => {
+    const map = new Map<string, [number, number, number]>();
+    for (const node of topologyNodes) {
+      map.set(node.id, toPosition(node));
+    }
+    return map;
+  }, [topologyNodes]);
+
+  // Compute edges: client connects to every non-client node
+  const edges = useMemo(() => {
+    const clientNode = topologyNodes.find(n => n.type === 'client');
+    if (!clientNode) return [];
+    return topologyNodes
+      .filter(n => n.type !== 'client')
+      .map(n => [clientNode.id, n.id] as [string, string]);
+  }, [topologyNodes]);
+
+  // Map packets to beams — route from client to targetNodeId
   const beams = useMemo(() => {
     return packets.map(packet => {
-      const fromId = packet.isResponse ? 'server' : 'client';
-      const toId = packet.isResponse ? 'client' : 'server';
-      const apiPos = getNodePosition('api');
-
-      let from: [number, number, number];
-      let to: [number, number, number];
-
-      if (packet.progress < 0.5) {
-        from = getNodePosition(fromId);
-        to = apiPos;
-      } else {
-        from = apiPos;
-        to = getNodePosition(toId);
-      }
-
-      const localProgress = packet.progress < 0.5
-        ? packet.progress * 2
-        : (packet.progress - 0.5) * 2;
+      const clientId = topologyNodes.find(n => n.type === 'client')?.id ?? 'client';
+      const targetId = packet.targetNodeId;
+      const clientPos = nodePositions.get(clientId) ?? [-3, 0, 0];
+      const targetPos = nodePositions.get(targetId) ?? [2, 0, 0];
 
       return {
         id: packet.id,
-        from,
-        to,
-        progress: localProgress,
+        from: packet.isResponse ? targetPos : clientPos,
+        to: packet.isResponse ? clientPos : targetPos,
+        progress: packet.progress,
         method: packet.method,
         status: packet.status,
         isResponse: packet.isResponse,
       };
     });
-  }, [packets]);
+  }, [packets, topologyNodes, nodePositions]);
 
   return (
     <>
@@ -81,28 +72,34 @@ function SceneContent({ packets, isCapturing }: NetworkScene3DProps) {
       <pointLight position={[0, -3, 5]} intensity={0.2} color="#22c55e" />
 
       <Stars radius={50} depth={40} count={2000} factor={3} saturation={0.2} fade speed={0.5} />
-
       <gridHelper args={[20, 40, '#1a2235', '#111827']} position={[0, -2, 0]} />
 
-      {EDGES.map(([fromId, toId]) => (
-        <EdgeLine key={`${fromId}-${toId}`} from={getNodePosition(fromId)} to={getNodePosition(toId)} />
-      ))}
+      {/* Connection edges */}
+      {edges.map(([fromId, toId]) => {
+        const from = nodePositions.get(fromId);
+        const to = nodePositions.get(toId);
+        if (!from || !to) return null;
+        return <EdgeLine key={`${fromId}-${toId}`} from={from} to={to} />;
+      })}
 
-      {SCENE_NODES.map(node => (
+      {/* Dynamic network nodes */}
+      {topologyNodes.map(node => (
         <NetworkNode3D
           key={node.id}
-          position={node.position}
+          position={toPosition(node)}
           label={node.label}
-          nodeType={node.type}
+          nodeType={getNodeType(node)}
+          color={node.color}
           isActive={isCapturing}
         />
       ))}
 
+      {/* Data beams */}
       {beams.map(beam => (
         <DataBeam
           key={beam.id}
-          from={beam.from}
-          to={beam.to}
+          from={beam.from as [number, number, number]}
+          to={beam.to as [number, number, number]}
           progress={beam.progress}
           method={beam.method}
           status={beam.status}
@@ -153,7 +150,7 @@ function EdgeLine({ from, to }: { from: [number, number, number]; to: [number, n
   );
 }
 
-export default function NetworkScene3D({ packets, isCapturing }: NetworkScene3DProps) {
+export default function NetworkScene3D({ packets, topologyNodes, isCapturing }: NetworkScene3DProps) {
   return (
     <Canvas
       camera={{ position: [0, 2, 6], fov: 50, near: 0.1, far: 100 }}
@@ -161,7 +158,7 @@ export default function NetworkScene3D({ packets, isCapturing }: NetworkScene3DP
       style={{ background: 'transparent' }}
       dpr={[1, 2]}
     >
-      <SceneContent packets={packets} isCapturing={isCapturing} />
+      <SceneContent packets={packets} topologyNodes={topologyNodes} isCapturing={isCapturing} />
     </Canvas>
   );
 }

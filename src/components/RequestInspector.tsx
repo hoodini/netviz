@@ -48,11 +48,23 @@ export default function RequestInspector({ request, onClose }: RequestInspectorP
             </span>
           </div>
           <div className="text-xs font-mono text-gray-300 break-all">{request.url}</div>
-          <div className="flex gap-4 text-xs text-gray-400">
+          <div className="flex gap-4 text-xs text-gray-400 flex-wrap">
             <span>⏱ {formatDuration(request.timing.duration)}</span>
             <span>📦 {formatBytes(request.size)}</span>
             <span>📄 {request.type}</span>
+            {request.protocol && <span>🔗 {request.protocol}</span>}
           </div>
+          {request.techStack && (
+            <div className="flex items-center gap-2 mt-1">
+              <span
+                className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                style={{ backgroundColor: request.techStack.color + '20', color: request.techStack.color }}
+              >
+                {request.techStack.name}
+              </span>
+              <span className="text-[10px] text-gray-500">{request.hostname}</span>
+            </div>
+          )}
         </div>
 
         {/* Timing Waterfall */}

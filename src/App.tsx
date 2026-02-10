@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useNetworkCapture } from './hooks/useNetworkCapture';
+import { fireDemoBurst } from './services/realTraffic';
 import NetworkScene3D from './components/NetworkScene3D';
 import RequestList from './components/RequestList';
 import RequestInspector from './components/RequestInspector';
@@ -15,6 +16,7 @@ export default function App() {
     stats,
     isCapturing,
     selectedRequest,
+    topologyNodes,
     setIsCapturing,
     setSelectedRequest,
     clearRequests,
@@ -54,6 +56,7 @@ export default function App() {
           isCapturing={isCapturing}
           onToggleCapture={() => setIsCapturing(prev => !prev)}
           onClear={clearRequests}
+          onGenerateTraffic={() => fireDemoBurst(6)}
         />
       </header>
 
@@ -79,7 +82,11 @@ export default function App() {
             <div className="absolute top-2 left-3 text-[10px] uppercase tracking-wider text-gray-500 font-semibold z-10">
               3D Network Topology
             </div>
-            <NetworkScene3D packets={packets} isCapturing={isCapturing} />
+            <NetworkScene3D
+              packets={packets}
+              topologyNodes={topologyNodes}
+              isCapturing={isCapturing}
+            />
             <HandTracker onGestureChange={handleGestureChange} />
           </div>
 

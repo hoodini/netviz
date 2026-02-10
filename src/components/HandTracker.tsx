@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useHandTracking } from '../hooks/useHandTracking';
 import type { HandGesture } from '../hooks/useHandTracking';
 
@@ -16,16 +17,14 @@ const GESTURE_LABELS: Record<string, { label: string; icon: string; color: strin
 export default function HandTracker({ onGestureChange }: HandTrackerProps) {
   const { gesture, isReady, isActive, videoRef, start, stop } = useHandTracking();
 
-  // Notify parent of gesture changes
-  if (onGestureChange) {
-    onGestureChange(gesture);
-  }
+  useEffect(() => {
+    onGestureChange?.(gesture);
+  }, [gesture, onGestureChange]);
 
   const gestureInfo = gesture ? GESTURE_LABELS[gesture.type] : null;
 
   return (
     <div className="absolute bottom-3 right-3 z-20 flex flex-col items-end gap-2">
-      {/* Webcam feed (small picture-in-picture) */}
       {isActive && (
         <div className="relative w-40 h-30 rounded-lg overflow-hidden border border-surface-600/50 shadow-lg">
           <video
@@ -35,7 +34,6 @@ export default function HandTracker({ onGestureChange }: HandTrackerProps) {
             playsInline
           />
 
-          {/* Gesture indicator overlay */}
           {gestureInfo && (
             <div
               className="absolute bottom-1 left-1 right-1 flex items-center justify-center gap-1.5
@@ -47,7 +45,6 @@ export default function HandTracker({ onGestureChange }: HandTrackerProps) {
             </div>
           )}
 
-          {/* Loading state */}
           {!isReady && (
             <div className="absolute inset-0 flex items-center justify-center bg-surface-900/80">
               <div className="text-xs text-gray-400 animate-pulse">Loading model...</div>
@@ -56,7 +53,6 @@ export default function HandTracker({ onGestureChange }: HandTrackerProps) {
         </div>
       )}
 
-      {/* Toggle button */}
       <button
         onClick={isActive ? stop : start}
         className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
