@@ -40,6 +40,131 @@
 
 ## 🏗️ Architecture
 
+### System Overview
+
+```mermaid
+flowchart TB
+    subgraph UI["🎨 User Interface"]
+        App[App Component]
+        Controls[ControlBar<br/>Start/Pause/Clear]
+        Stats[StatsBar<br/>Live KPIs]
+        Topology[TopologyCanvas<br/>Animated Network Graph]
+        RequestLog[RequestList<br/>HTTP Request Feed]
+        Inspector[RequestInspector<br/>Request Details]
+        Waterfall[TimingWaterfall<br/>Phase Breakdown]
+    end
+    
+    subgraph State["⚡ State Management"]
+        Hook[useNetworkCapture Hook]
+        ReqState[(Requests State)]
+        PktState[(Packets State)]
+        StatState[(Stats State)]
+    end
+    
+    subgraph Services["🔧 Services & Utils"]
+        Mock[mockTraffic.ts<br/>Traffic Generator]
+        Colors[colors.ts<br/>Theme & Utils]
+        Types[network.ts<br/>Type Definitions]
+    end
+    
+    App --> Controls
+    App --> Stats
+    App --> Topology
+    App --> RequestLog
+    App --> Inspector
+    App --> Waterfall
+    
+    Controls -->|User Actions| Hook
+    RequestLog -->|Selection| Inspector
+    Inspector --> Waterfall
+    
+    Hook --> ReqState
+    Hook --> PktState
+    Hook --> StatState
+    
+    Hook -->|Generate Traffic| Mock
+    Hook -->|Format Data| Colors
+    
+    ReqState -.->|Subscribe| Stats
+    ReqState -.->|Subscribe| RequestLog
+    PktState -.->|Subscribe| Topology
+    StatState -.->|Subscribe| Stats
+    
+    Types -.->|Type Safety| Hook
+    Types -.->|Type Safety| Mock
+    
+    classDef uiClass fill:#3b82f6,stroke:#2563eb,color:#fff
+    classDef stateClass fill:#10b981,stroke:#059669,color:#fff
+    classDef serviceClass fill:#8b5cf6,stroke:#7c3aed,color:#fff
+    
+    class Controls,Stats,Topology,RequestLog,Inspector,Waterfall,App uiClass
+    class Hook,ReqState,PktState,StatState stateClass
+    class Mock,Colors,Types serviceClass
+```
+
+### Component Hierarchy
+
+```mermaid
+flowchart LR
+    Root[🌐 App.tsx]
+    Root --> Bar1[ControlBar]
+    Root --> Bar2[StatsBar]
+    Root --> Canvas[TopologyCanvas]
+    Root --> List[RequestList]
+    Root --> Inspect[RequestInspector]
+    
+    Inspect --> Water[TimingWaterfall]
+    
+    Root -.->|useNetworkCapture| Hook[useNetworkCapture Hook]
+    Hook -.->|mockTraffic| Mock[Traffic Generator]
+    
+    classDef component fill:#0ea5e9,stroke:#0284c7,color:#fff
+    classDef hook fill:#f59e0b,stroke:#d97706,color:#fff
+    classDef service fill:#ec4899,stroke:#db2777,color:#fff
+    
+    class Root,Bar1,Bar2,Canvas,List,Inspect,Water component
+    class Hook hook
+    class Mock service
+```
+
+### Data Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant UI as UI Components
+    participant Hook as useNetworkCapture
+    participant Mock as mockTraffic
+    participant State as React State
+    
+    User->>UI: Click "Start Capture"
+    UI->>Hook: handleStartCapture()
+    activate Hook
+    Hook->>Mock: generateRequest()
+    Mock-->>Hook: NetworkRequest object
+    Hook->>State: Update requests[]
+    Hook->>State: Update packets[]
+    Hook->>State: Update stats
+    deactivate Hook
+    
+    State-->>UI: Re-render
+    UI-->>User: Display updated visuals
+    
+    loop Every 1-3 seconds
+        Hook->>Mock: generateRequest()
+        Mock-->>Hook: New request
+        Hook->>State: Append to state
+        State-->>UI: Trigger re-render
+    end
+    
+    User->>UI: Select request
+    UI->>Hook: setSelectedRequest(id)
+    Hook->>State: Update selection
+    State-->>UI: Show Inspector panel
+```
+
+### File Structure
+
 ```
 src/
 ├── components/
