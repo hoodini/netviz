@@ -1,21 +1,12 @@
 # Copilot Instructions — copilot-cc
 
 ## Project Overview
-This is a **React + TypeScript** demo project built with Vite, used for a GitHub Copilot training workshop. The app being built is an interactive web visualization tool.
+React + TypeScript web visualization app built with Vite for a GitHub Copilot training workshop. Dark-themed, interactive, data-driven.
 
-## Tech Stack & Conventions
-- **Framework:** React 18+ with TypeScript (strict mode)
-- **Build tool:** Vite
-- **Styling:** Tailwind CSS with a dark theme by default
-- **State:** React hooks (`useState`, `useReducer`, `useContext`) — no external state library unless complexity demands it
-- **Data viz:** Recharts for charts, raw SVG/Canvas for custom animations
-
-## Code Patterns
-- Use **functional components only** — no class components
-- Prefer `interface` over `type` for object shapes; use `type` for unions/intersections
-- Name components in PascalCase, hooks with `use` prefix, utilities in camelCase
-- Keep components under 150 lines — extract logic into custom hooks (`src/hooks/`) or utilities (`src/utils/`)
-- Colocate component-specific types in the same file; shared types go in `src/types/`
+## Tech Stack
+- **React 18+** with TypeScript strict mode, **Vite** build, **Tailwind CSS** (dark theme default)
+- **State:** React hooks only (`useState`, `useReducer`, `useContext`) — no Redux/Zustand unless complexity demands it
+- **Data viz:** Recharts for charts; raw SVG/Canvas for custom animations
 
 ## Project Structure
 ```
@@ -28,18 +19,28 @@ src/
   assets/       # Static assets
 ```
 
-## Git Workflow
-- Atomic commits: one logical change per commit
-- Commit format: `type: description` (e.g., `feat: add packet timeline`, `fix: correct color mapping`)
-- Auto-push after every commit
-- Tag stable milestones before risky changes: `git tag -a "stable-<feature>-v1" -m "description"`
-
-## Testing
-- Test files live next to source: `Component.test.tsx` beside `Component.tsx`
-- Use Vitest + React Testing Library
-- Focus tests on behavior, not implementation details
-
-## What NOT to Do
+## Code Patterns
+- Functional components only — no class components
+- `interface` for object shapes; `type` for unions/intersections
+- PascalCase components, `use` prefix hooks, camelCase utilities
+- Components under 150 lines — extract to `src/hooks/` or `src/utils/`
+- Colocate component-specific types; shared types in `src/types/`
+- Never use `any` — use `unknown` and narrow, or define a proper type
 - Don't add comments explaining obvious code — let types and naming speak
 - Don't install packages without checking if the existing stack covers the need
-- Don't use `any` — use `unknown` and narrow, or define a proper type
+
+## Git Workflow (Mandatory)
+- **Auto-push after every commit** — always push immediately
+- **After commits in React projects:** run build and restart the dev server
+- Atomic commits, one logical change each: `type: description` (e.g., `feat: add packet timeline`)
+- **Before modifying a working feature:** check `git tag -l "stable-*"` — if no tag exists, create one first:
+  ```bash
+  git tag -a "stable-<feature>-v1" -m "Working state before changes"
+  git push origin --tags
+  ```
+- To fix a broken file: `git checkout stable-<feature>-v1 -- path/to/file.tsx`
+- Use feature branches for significant changes
+
+## Testing
+- Test files colocated: `Component.test.tsx` beside `Component.tsx`
+- Vitest + React Testing Library — test behavior, not implementation
