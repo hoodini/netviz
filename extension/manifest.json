@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "NetViz Traffic Monitor",
+  "version": "1.0",
+  "description": "Captures network traffic from all browser tabs for NetViz visualization",
+  "permissions": [
+    "webRequest",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost:*/*",
+        "http://127.0.0.1:*/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

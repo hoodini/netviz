@@ -13,12 +13,65 @@ interface InterceptedMeta {
   timestamp: number;
 }
 
+/** Shape of messages the Chrome extension sends via postMessage */
+interface ExtensionRequestData {
+  type: 'NETVIZ_REQUEST';
+  url: string;
+  method: string;
+  statusCode: number;
+  resourceType: string;
+  tabId: number;
+  tabDomain: string;
+  startTime: number;
+  endTime: number;
+  ip: string;
+  fromCache: boolean;
+  requestHeaders: Record<string, string>;
+  responseHeaders: Record<string, string>;
+}
+
 type RequestCallback = (request: NetworkRequest) => void;
+type ExtensionStatusCallback = (connected: boolean) => void;
 
 const interceptedRequests: InterceptedMeta[] = [];
-const seenEntryUrls = new Set<string>();
+const seenUrls = new Set<string>();
 let onRequestCallback: RequestCallback | null = null;
-let observerActive = false;
+let onExtensionStatusCallback: ExtensionStatusCallback | null = null;
+let extensionConnected = false;
+let observerInstance: PerformanceObserver | null = null;
+
+function makeDedupKey(url: string, timestamp: number): string {
+  return `${url}|${Math.floor(timestamp / 500)}`;
+}
+
+/** Convert extension webRequest data into a NetworkRequest */
+function extensionDataToRequest(data: ExtensionRequestData): NetworkRequest {
+  const hostname = getHostname(data.url);
+  const techStack = detectTechStack(data.url, data.responseHeaders);
+  const duration = Math.max(0, data.endTime - data.startTime);
+  const isError = data.statusCode >= 400 || data.statusCode === 0;
+
+  return {
+    id: generateId(),
+    url: data.url,
+    hostname,
+    method: (data.method || 'GET') as HttpMethod,
+    status: isError ? 'error' : 'success',
+    statusCode: data.statusCode,
+    headers: data.requestHeaders || {},
+    responseHeaders: data.responseHeaders || {},
+    timing: {
+      startTime: data.startTime,
+      duration,
+      responseEnd: data.endTime,
+    },
+    size: 0,
+    type: data.resourceType || 'other',
+    timestamp: Date.now(),
+    techStack,
+    tabDomain: data.tabDomain,
+  };
+}
 
 /** Convert a PerformanceResourceTiming entry + optional intercepted meta into a NetworkRequest */
 function entryToRequest(
@@ -61,6 +114,7 @@ function entryToRequest(
     initiatorType: entry.initiatorType,
     techStack,
     payload: meta?.payload,
+    tabDomain: window.location.hostname,
   };
 }
 
@@ -72,23 +126,58 @@ function findMatchingMeta(url: string): InterceptedMeta | undefined {
   return undefined;
 }
 
+/** Listen for messages from the NetViz Chrome extension content script */
+function startExtensionListener(): void {
+  window.addEventListener('message', (event) => {
+    if (event.source !== window) return;
+
+    if (event.data?.type === 'NETVIZ_EXTENSION_READY') {
+      extensionConnected = true;
+      // Extension covers all tabs — disable PerformanceObserver to avoid dupes
+      if (observerInstance) {
+        observerInstance.disconnect();
+        observerInstance = null;
+      }
+      onExtensionStatusCallback?.(true);
+      return;
+    }
+
+    if (event.data?.type === 'NETVIZ_EXTENSION_DISCONNECTED') {
+      extensionConnected = false;
+      onExtensionStatusCallback?.(false);
+      // Fall back to PerformanceObserver for current tab
+      if (onRequestCallback) startPerformanceObserver();
+      return;
+    }
+
+    if (event.data?.type !== 'NETVIZ_REQUEST' || !onRequestCallback) return;
+
+    const data = event.data as ExtensionRequestData;
+    if (!data.url.startsWith('http')) return;
+
+    const dedupKey = makeDedupKey(data.url, data.endTime);
+    if (seenUrls.has(dedupKey)) return;
+    seenUrls.add(dedupKey);
+
+    const request = extensionDataToRequest(data);
+    onRequestCallback(request);
+  });
+}
+
 /** Install the PerformanceObserver to watch for new resource entries */
 function startPerformanceObserver(): void {
-  if (observerActive) return;
-  observerActive = true;
+  if (extensionConnected || observerInstance) return;
 
-  const observer = new PerformanceObserver((list) => {
+  observerInstance = new PerformanceObserver((list) => {
     for (const entry of list.getEntries()) {
       const resEntry = entry as PerformanceResourceTiming;
       const url = resEntry.name;
 
-      // Skip data URIs, extensions, and duplicates
       if (url.startsWith('data:') || url.startsWith('chrome-extension:')) continue;
-      
-      // Create a dedup key based on URL + start time
-      const dedupKey = `${url}|${Math.round(resEntry.startTime)}`;
-      if (seenEntryUrls.has(dedupKey)) continue;
-      seenEntryUrls.add(dedupKey);
+
+      const dedupKey = makeDedupKey(url, performance.timeOrigin + resEntry.startTime);
+      if (seenUrls.has(dedupKey)) continue;
+      seenUrls.add(dedupKey);
 
       const meta = findMatchingMeta(url);
       const request = entryToRequest(resEntry, meta);
@@ -96,7 +185,7 @@ function startPerformanceObserver(): void {
     }
   });
 
-  observer.observe({ type: 'resource', buffered: true });
+  observerInstance.observe({ type: 'resource', buffered: true });
 }
 
 /** Intercept fetch to capture method, headers, status, and payload */
@@ -204,9 +293,14 @@ function interceptXHR(): void {
   };
 }
 
-/** Start capturing real browser traffic */
-export function startCapture(callback: RequestCallback): void {
+/** Start capturing browser traffic. Extension provides cross-tab data; PerformanceObserver is a fallback. */
+export function startCapture(
+  callback: RequestCallback,
+  onExtensionStatus?: ExtensionStatusCallback
+): void {
   onRequestCallback = callback;
+  onExtensionStatusCallback = onExtensionStatus ?? null;
+  startExtensionListener();
   interceptFetch();
   interceptXHR();
   startPerformanceObserver();
@@ -220,6 +314,11 @@ export function stopCapture(): void {
 /** Resume receiving callbacks */
 export function resumeCapture(callback: RequestCallback): void {
   onRequestCallback = callback;
+}
+
+/** Check if the Chrome extension is currently connected */
+export function isExtensionConnected(): boolean {
+  return extensionConnected;
 }
 
 /** Public API endpoints known to support CORS, for generating demo traffic */

@@ -65,6 +65,11 @@ export default function RequestInspector({ request, onClose }: RequestInspectorP
               <span className="text-[10px] text-gray-500">{request.hostname}</span>
             </div>
           )}
+          {request.tabDomain && (
+            <div className="text-[10px] text-gray-500 mt-1">
+              Tab: {request.tabDomain}
+            </div>
+          )}
         </div>
 
         {/* Timing Waterfall */}

@@ -57,6 +57,9 @@ export default function RequestList({ requests, selectedId, onSelect }: RequestL
                   {req.techStack.name}
                 </span>
               )}
+              {req.tabDomain && req.tabDomain !== req.hostname && (
+                <span className="text-[9px] text-gray-600 ml-auto">via {req.tabDomain}</span>
+              )}
             </div>
           </button>
         ))}

@@ -1,10 +1,10 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { NetworkRequest, DashboardStats, Packet, TopologyNode } from '../types/network';
 import { startCapture, stopCapture, resumeCapture } from '../services/realTraffic';
 import { generateId } from '../utils/colors';
 import { getHostname, detectTechStack, getNodeTypeFromTech } from '../utils/techDetection';
 
-const MAX_REQUESTS = 200;
+const MAX_REQUESTS = 500;
 const CLIENT_NODE: TopologyNode = {
   id: 'client',
   label: 'Browser',
@@ -69,7 +69,8 @@ export function useNetworkCapture() {
   const [packets, setPackets] = useState<Packet[]>([]);
   const [isCapturing, setIsCapturing] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<NetworkRequest | null>(null);
-  const [topologyNodes, setTopologyNodes] = useState<TopologyNode[]>([CLIENT_NODE]);
+  const [domainFilter, setDomainFilter] = useState<string | null>(null);
+  const [extensionConnected, setExtensionConnected] = useState(false);
   const animFrameRef = useRef<number>(0);
   const captureInitialized = useRef(false);
 
@@ -85,9 +86,7 @@ export function useNetworkCapture() {
 
     setRequests(prev => {
       const next = [request, ...prev];
-      const trimmed = next.length > MAX_REQUESTS ? next.slice(0, MAX_REQUESTS) : next;
-      setTopologyNodes(buildTopologyNodes(trimmed));
-      return trimmed;
+      return next.length > MAX_REQUESTS ? next.slice(0, MAX_REQUESTS) : next;
     });
 
     const outPacket: Packet = {
@@ -101,7 +100,7 @@ export function useNetworkCapture() {
     };
     setPackets(prev => [...prev, outPacket]);
 
-    const responseDelay = Math.min(Math.max(request.timing.duration * 0.4, 100), 2000);
+    const responseDelay = Math.min(Math.max((request.timing.duration || 100) * 0.4, 100), 2000);
     setTimeout(() => {
       const inPacket: Packet = {
         id: generateId(),
@@ -116,6 +115,44 @@ export function useNetworkCapture() {
     }, responseDelay);
   }, []);
 
+  // Unique tab domains sorted by request count
+  const availableDomains = useMemo(() => {
+    const domainCounts = new Map<string, number>();
+    for (const req of requests) {
+      const d = req.tabDomain || req.hostname;
+      domainCounts.set(d, (domainCounts.get(d) || 0) + 1);
+    }
+    return Array.from(domainCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([domain]) => domain);
+  }, [requests]);
+
+  // Filtered views based on domain filter
+  const filteredRequestIds = useMemo(() => {
+    if (!domainFilter) return null;
+    return new Set(
+      requests
+        .filter(r => (r.tabDomain || r.hostname) === domainFilter)
+        .map(r => r.id)
+    );
+  }, [requests, domainFilter]);
+
+  const filteredRequests = useMemo(() => {
+    if (!filteredRequestIds) return requests;
+    return requests.filter(r => filteredRequestIds.has(r.id));
+  }, [requests, filteredRequestIds]);
+
+  const filteredPackets = useMemo(() => {
+    if (!filteredRequestIds) return packets;
+    return packets.filter(p => filteredRequestIds.has(p.requestId));
+  }, [packets, filteredRequestIds]);
+
+  const topologyNodes = useMemo(
+    () => buildTopologyNodes(filteredRequests),
+    [filteredRequests]
+  );
+
+  // Packet animation loop
   useEffect(() => {
     let lastTime = performance.now();
     const animate = (now: number) => {
@@ -135,12 +172,14 @@ export function useNetworkCapture() {
     return () => cancelAnimationFrame(animFrameRef.current);
   }, []);
 
+  // Start capture once
   useEffect(() => {
     if (captureInitialized.current) return;
     captureInitialized.current = true;
-    startCapture(addRequest);
+    startCapture(addRequest, setExtensionConnected);
   }, [addRequest]);
 
+  // Pause / resume
   useEffect(() => {
     if (isCapturing) {
       resumeCapture(addRequest);
@@ -149,35 +188,39 @@ export function useNetworkCapture() {
     }
   }, [isCapturing, addRequest]);
 
-  const stats: DashboardStats = {
-    totalRequests: requests.length,
-    successCount: requests.filter(r => r.status === 'success').length,
-    errorCount: requests.filter(r => r.status === 'error').length,
-    avgResponseTime: requests.length
-      ? requests.reduce((a, r) => a + r.timing.duration, 0) / requests.length
+  const stats: DashboardStats = useMemo(() => ({
+    totalRequests: filteredRequests.length,
+    successCount: filteredRequests.filter(r => r.status === 'success').length,
+    errorCount: filteredRequests.filter(r => r.status === 'error').length,
+    avgResponseTime: filteredRequests.length
+      ? filteredRequests.reduce((a, r) => a + r.timing.duration, 0) / filteredRequests.length
       : 0,
-    totalBytes: requests.reduce((a, r) => a + r.size, 0),
-    requestsPerSecond: requests.length > 1
-      ? (requests.length / ((Date.now() - (requests[requests.length - 1]?.timestamp ?? Date.now())) / 1000)) || 0
+    totalBytes: filteredRequests.reduce((a, r) => a + r.size, 0),
+    requestsPerSecond: filteredRequests.length > 1
+      ? (filteredRequests.length / ((Date.now() - (filteredRequests[filteredRequests.length - 1]?.timestamp ?? Date.now())) / 1000)) || 0
       : 0,
-  };
+  }), [filteredRequests]);
 
   const clearRequests = useCallback(() => {
     setRequests([]);
     setPackets([]);
     setSelectedRequest(null);
-    setTopologyNodes([CLIENT_NODE]);
+    setDomainFilter(null);
   }, []);
 
   return {
-    requests,
-    packets,
+    requests: filteredRequests,
+    packets: filteredPackets,
     stats,
     isCapturing,
     selectedRequest,
     topologyNodes,
+    domainFilter,
+    availableDomains,
+    extensionConnected,
     setIsCapturing,
     setSelectedRequest,
+    setDomainFilter,
     clearRequests,
   };
 }

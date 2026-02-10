@@ -39,6 +39,7 @@ export interface NetworkRequest {
   initiatorType?: string;
   techStack?: TechStack;
   payload?: string;
+  tabDomain?: string;
 }
 
 export interface Packet {
